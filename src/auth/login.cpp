@@ -6,6 +6,8 @@
 
 namespace tdesktop {
 
+static const int MAX_FIELD_LEN = 20;
+
 LoginScreen::LoginScreen(Terminal& term, ColorManager& colors)
     : term_(term), colors_(colors) {
     buffer_ = std::make_unique<Buffer>(term.getCols(), term.getRows());
@@ -80,9 +82,9 @@ void LoginScreen::draw() {
     term_.writeRaw("\033[" + std::to_string(user_y) + ";" + std::to_string(field_x) + "H");
     term_.writeRaw("\033[38;5;15m\033[48;5;17m");
     if (input_field_ == 0) term_.writeRaw("\033[7m");
-    term_.writeRaw(" Username: " + username_);
-    std::string padding(20 - username_.size(), ' ');
-    term_.writeRaw(padding);
+    term_.writeRaw(" Username: " + username_.substr(0, MAX_FIELD_LEN));
+    int upad = MAX_FIELD_LEN - std::min(static_cast<int>(username_.size()), MAX_FIELD_LEN);
+    if (upad > 0) term_.writeRaw(std::string(upad, ' '));
     if (input_field_ == 0) term_.writeRaw("\033[27m");
 
     // Password field
@@ -92,9 +94,11 @@ void LoginScreen::draw() {
     if (input_field_ == 1) term_.writeRaw("\033[7m");
     term_.writeRaw(" Password: ");
     std::string masked;
-    for (size_t i = 0; i < password_.size(); ++i) masked += "*";
+    size_t pwd_len = std::min(password_.size(), static_cast<size_t>(MAX_FIELD_LEN));
+    for (size_t i = 0; i < pwd_len; ++i) masked += "*";
     term_.writeRaw(masked);
-    std::string pad2(20 - password_.size(), ' ');
+    int ppad = MAX_FIELD_LEN - std::min(static_cast<int>(password_.size()), MAX_FIELD_LEN);
+    if (ppad > 0) term_.writeRaw(std::string(ppad, ' '));
     term_.writeRaw(pad2);
     if (input_field_ == 1) term_.writeRaw("\033[27m");
 
@@ -149,11 +153,15 @@ bool LoginScreen::handleKey(const KeyEvent& ev) {
             if (ev.codepoint >= 32 && ev.codepoint < 127) {
                 char c = static_cast<char>(ev.codepoint);
                 if (input_field_ == 0) {
-                    username_ += c;
-                    cursor_pos_ = static_cast<int>(username_.size());
+                    if (username_.size() < static_cast<size_t>(MAX_FIELD_LEN)) {
+                        username_ += c;
+                        cursor_pos_ = static_cast<int>(username_.size());
+                    }
                 } else if (input_field_ == 1) {
-                    password_ += c;
-                    cursor_pos_ = static_cast<int>(password_.size());
+                    if (password_.size() < static_cast<size_t>(MAX_FIELD_LEN)) {
+                        password_ += c;
+                        cursor_pos_ = static_cast<int>(password_.size());
+                    }
                 }
             }
             return false;

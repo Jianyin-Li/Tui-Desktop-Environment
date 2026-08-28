@@ -22,7 +22,6 @@ void Renderer::present() {
 
 void Renderer::clear() {
     back_.clear();
-    ::write(STDOUT_FILENO, "\033[2J\033[H", 7);
 }
 
 void Renderer::drawChar(int x, int y, char32_t ch) {
@@ -32,10 +31,13 @@ void Renderer::drawChar(int x, int y, char32_t ch) {
         back_.setBG(x, y, cur_bg_r_, cur_bg_g_, cur_bg_b_);
     } else {
         auto& cell = back_.at(x, y);
-        cell.fg_idx = cur_fg_idx_;
-        cell.bg_idx = cur_bg_idx_;
-        cell.use_rgb = false;
-        cell.dirty = true;
+        if (cell.fg_idx != cur_fg_idx_ || cell.bg_idx != cur_bg_idx_ || cell.use_rgb) {
+            cell.fg_idx = cur_fg_idx_;
+            cell.bg_idx = cur_bg_idx_;
+            cell.use_rgb = false;
+            cell.dirty = true;
+            back_.markDirty(x, y, 1, 1);
+        }
     }
     back_.setStyle(x, y, cur_bold_, cur_dim_, cur_italic_,
                    cur_underline_, cur_blink_, cur_reverse_);

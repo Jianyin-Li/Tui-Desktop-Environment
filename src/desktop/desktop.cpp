@@ -23,6 +23,13 @@ bool Desktop::init() {
     int cols = term_.getCols();
     int rows = term_.getRows();
 
+    const char* ssh_conn = std::getenv("SSH_CONNECTION");
+    const char* ssh_client = std::getenv("SSH_CLIENT");
+    is_ssh_ = (ssh_conn && ssh_conn[0]) || (ssh_client && ssh_client[0]);
+    if (is_ssh_) {
+        LOG_INFO("SSH connection detected, throttling render");
+    }
+
     front_buffer_ = std::make_unique<Buffer>(cols, rows);
     back_buffer_ = std::make_unique<Buffer>(cols, rows);
     renderer_ = std::make_unique<Renderer>(*front_buffer_, *back_buffer_, colors_);
@@ -64,9 +71,10 @@ void Desktop::run() {
 
     render();
 
+    int poll_ms = is_ssh_ ? 100 : 16;
     while (running_ && loop_.isRunning()) {
         Event ev;
-        if (loop_.poll(ev, 16)) {
+        if (loop_.poll(ev, poll_ms)) {
             switch (ev.type) {
                 case Event::Key:
                     handleKeyEvent(ev.key);
@@ -94,7 +102,6 @@ void Desktop::render() {
     int cols = term_.getCols();
     int rows = term_.getRows();
 
-    renderer_->clear();
     drawDesktopBackground();
     drawClock();
 

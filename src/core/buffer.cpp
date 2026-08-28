@@ -24,6 +24,7 @@ Rect Rect::united(const Rect& o) const {
 
 Buffer::Buffer(int cols, int rows)
     : cols_(cols), rows_(rows), cells_(static_cast<size_t>(cols) * rows) {
+    markAllDirty();
 }
 
 void Buffer::resize(int cols, int rows) {
@@ -37,7 +38,6 @@ void Buffer::clear() {
     for (auto& cell : cells_) {
         cell = CharCell{};
     }
-    markAllDirty();
 }
 
 void Buffer::clearRect(const Rect& rect) {
@@ -95,10 +95,13 @@ void Buffer::setStyle(int x, int y, bool bold, bool dim, bool italic,
                       bool underline, bool blink, bool reverse) {
     if (x < 0 || x >= cols_ || y < 0 || y >= rows_) return;
     auto& cell = cells_[index(x, y)];
-    cell.bold = bold; cell.dim = dim; cell.italic = italic;
-    cell.underline = underline; cell.blink = blink; cell.reverse = reverse;
-    cell.dirty = true;
-    addDirtyRect({x, y, 1, 1});
+    if (cell.bold != bold || cell.dim != dim || cell.italic != italic ||
+        cell.underline != underline || cell.blink != blink || cell.reverse != reverse) {
+        cell.bold = bold; cell.dim = dim; cell.italic = italic;
+        cell.underline = underline; cell.blink = blink; cell.reverse = reverse;
+        cell.dirty = true;
+        addDirtyRect({x, y, 1, 1});
+    }
 }
 
 void Buffer::markDirty(int x, int y, int w, int h) {
@@ -163,16 +166,25 @@ std::string Buffer::render(const Buffer& prev) const {
 
     for (const auto& rect : rects) {
         for (int y = rect.y; y < rect.y + rect.h && y < rows_; ++y) {
-            out << "\033[" << (y + 1) << ";" << (rect.x + 1) << "H";
-            CharCell prev_style{};
+            CharCell last_output;
+            bool row_needs_pos = true;
             for (int x = rect.x; x < rect.x + rect.w && x < cols_; ++x) {
                 const auto& cell = cells_[index(x, y)];
-                std::string esc = escapeSequence(cell, prev_style);
+                const auto& prev_cell = prev.at(x, y);
+                if (cell == prev_cell) {
+                    row_needs_pos = true;
+                    continue;
+                }
+                if (row_needs_pos) {
+                    out << "\033[" << (y + 1) << ";" << (x + 1) << "H";
+                    row_needs_pos = false;
+                    last_output = {};
+                }
+                std::string esc = escapeSequence(cell, last_output);
                 if (!esc.empty()) out << esc;
                 if (cell.ch < 128) {
                     out << static_cast<char>(cell.ch);
                 } else {
-                    // Simple UTF-8 encoding for codepoints up to U+FFFF
                     char32_t cp = cell.ch;
                     if (cp < 0x80) {
                         out << static_cast<char>(cp);
@@ -185,7 +197,7 @@ std::string Buffer::render(const Buffer& prev) const {
                         out << static_cast<char>(0x80 | (cp & 0x3F));
                     }
                 }
-                prev_style = cell;
+                last_output = cell;
             }
         }
     }

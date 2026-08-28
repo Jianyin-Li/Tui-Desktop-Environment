@@ -64,6 +64,7 @@ private:
 
     bool running_ = false;
     bool help_visible_ = false;
+    bool is_ssh_ = false;
     int fps_timer_ = 0;
 
     void setupHotkeys();
