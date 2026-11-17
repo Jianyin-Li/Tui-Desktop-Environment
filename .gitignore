@@ -30,3 +30,6 @@ config/tdesktop.local.conf
 *.rpm
 *.tar.gz
 *.zip
+
+# Local build artifacts
+dist/
