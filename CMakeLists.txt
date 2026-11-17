@@ -1,27 +1,50 @@
-cmake_minimum_required(VERSION 3.15)
-project(tdesktop VERSION 1.0.0 LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_CXX_STANDARD 17)
+project(tdesktop
+  VERSION 0.1.0
+  DESCRIPTION "A TTY-first desktop environment"
+  LANGUAGES CXX
+)
+
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/generated/tdesktop/version.h"
+  @ONLY
+)
 
-# PAM is optional for compilation (runtime fallback available)
-find_package(PAM QUIET)
-if(NOT PAM_FOUND)
-    message(STATUS "PAM not found - shadow authentication will be used as fallback")
-    # Create dummy target for conditional compilation
-    add_library(PAM::PAM INTERFACE IMPORTED)
-endif()
+add_library(tdesktop_core STATIC
+  src/platform/environment.cpp
+  src/platform/launch_context.cpp
+)
+target_include_directories(tdesktop_core
+  PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated"
+)
+target_compile_options(tdesktop_core PRIVATE -Wall -Wextra -Wpedantic)
 
-option(USE_NCURSES "Use ncurses for terminal control" OFF)
-option(USE_LIBNOTIFY "Use libnotify for notification" OFF)
-option(USE_LIBX11 "Use X11 for mouse reading" OFF)
+add_executable(tdesktop src/main.cpp)
+target_link_libraries(tdesktop PRIVATE tdesktop_core)
+target_compile_options(tdesktop PRIVATE -Wall -Wextra -Wpedantic)
 
-add_subdirectory(src)
-
+include(CTest)
 if(BUILD_TESTING)
-    enable_testing()
-    add_subdirectory(tests)
+  add_executable(environment_test tests/environment_test.cpp)
+  target_link_libraries(environment_test PRIVATE tdesktop_core)
+  target_include_directories(environment_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+  target_compile_options(environment_test PRIVATE -Wall -Wextra -Wpedantic)
+  add_test(NAME environment_test COMMAND environment_test)
+
+  add_executable(launch_context_test tests/launch_context_test.cpp)
+  target_link_libraries(launch_context_test PRIVATE tdesktop_core)
+  target_include_directories(launch_context_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+  target_compile_options(launch_context_test PRIVATE -Wall -Wextra -Wpedantic)
+  add_test(NAME launch_context_test COMMAND launch_context_test)
 endif()
+
+install(TARGETS tdesktop RUNTIME DESTINATION bin)

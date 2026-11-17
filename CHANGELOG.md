@@ -1,14 +1,13 @@
 # Changelog
 
-## v1.0.0 (2026-Q2)
-- Initial release
-- Window management with title bar, close button, drag-to-move
-- Taskbar with window list and clock
-- Application launcher with search
-- PAM authentication with login screen
-- Command panel with PTY shell
-- Notification system with D-Bus listener
-- Mouse support (hardware + terminal protocol)
-- Multi-workspace support (up to 9)
-- Color theme system
-- JSON configuration
+## [0.1.0] - 2026-11-17
+
+Fresh TTY-first baseline.
+
+- Add `Environment` snapshot with order/duplicate preservation.
+- Add `LaunchContext` for direct launches: uid/gid/groups, cwd, tty and full
+  inherited environment.
+- Add managed launch contract reserved for the target-only session manager.
+- Add `tdesktop --diagnostics`.
+- Add unit tests for environment and launch-context behaviour.
+- Add design and implementation-plan documents under `dev-docs/`.
