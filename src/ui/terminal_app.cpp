@@ -185,8 +185,7 @@ ftxui::Element TerminalApp::Header() {
   if (hidden_) {
     return ftxui::hbox({
         ftxui::text(" TDESKTOP ") | ftxui::bold |
-            ftxui::color(ftxui::Color::Black) |
-            ftxui::bgcolor(ftxui::Color::Cyan),
+            ftxui::color(ftxui::Color::Cyan),
         ftxui::filler(),
         ftxui::text(" " + HostName() + "  " + Clock() + " ") |
             ftxui::color(ftxui::Color::White),
@@ -200,8 +199,7 @@ ftxui::Element TerminalApp::Header() {
   const std::string status = session_.alive() ? "running" : "exited";
   return ftxui::hbox({
       ftxui::text(" TDESKTOP ") | ftxui::bold |
-          ftxui::color(ftxui::Color::Black) |
-          ftxui::bgcolor(ftxui::Color::Cyan),
+          ftxui::color(ftxui::Color::Cyan),
       ftxui::text(" " + title + " ") | ftxui::flex |
           ftxui::color(ftxui::Color::White),
       ftxui::text(" " + status + " ") | ftxui::dim,
@@ -211,11 +209,10 @@ ftxui::Element TerminalApp::Header() {
 ftxui::Element TerminalApp::Footer() {
   if (hidden_) {
     return ftxui::hbox({
-        ftxui::text("  [Terminal]  ") | ftxui::color(ftxui::Color::White) |
-            ftxui::bgcolor(session_.alive() ? ftxui::Color::Green
-                                            : ftxui::Color::GrayDark),
-        ftxui::text("  [Exit]  ") | ftxui::color(ftxui::Color::White) |
-            ftxui::bgcolor(ftxui::Color::GrayDark),
+        ftxui::text("  [Terminal]  ") |
+            ftxui::color(session_.alive() ? ftxui::Color::GreenLight
+                                          : ftxui::Color::GrayLight),
+        ftxui::text("  [Exit]  ") | ftxui::dim,
         ftxui::filler(),
         ftxui::text("←/→ 选择  Enter 打开  Alt+Shift+X 退出 TUI ") |
             ftxui::dim,
@@ -240,14 +237,15 @@ ftxui::Element TerminalApp::HomeTile(const std::string& icon,
       ftxui::text(subtitle) | ftxui::center,
   });
 
-  auto tile = content | ftxui::border | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, 24) |
-              ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, 7);
   if (selected) {
-    return tile | ftxui::bgcolor(ftxui::Color::Cyan) |
-           ftxui::color(ftxui::Color::Black);
+    return content | ftxui::borderStyled(ftxui::Color::Cyan) |
+           ftxui::size(ftxui::WIDTH, ftxui::EQUAL, 24) |
+           ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, 7) |
+           ftxui::color(ftxui::Color::Cyan) | ftxui::bold;
   }
-  return tile | ftxui::bgcolor(ftxui::Color::GrayDark) |
-         ftxui::color(ftxui::Color::White);
+  return content | ftxui::border |
+         ftxui::size(ftxui::WIDTH, ftxui::EQUAL, 24) |
+         ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, 7);
 }
 
 ftxui::Element TerminalApp::RunningCard() {
@@ -272,7 +270,7 @@ ftxui::Element TerminalApp::RunningCard() {
              }),
              ftxui::text("Enter 打开    Alt+Shift+Q 关闭") | ftxui::dim,
          }) |
-         ftxui::border | ftxui::bgcolor(ftxui::Color::Black);
+         ftxui::border;
 }
 
 ftxui::Element TerminalApp::RenderMain() {
@@ -284,8 +282,6 @@ ftxui::Element TerminalApp::RenderMain() {
 }
 
 ftxui::Element TerminalApp::RenderHome() {
-  auto wallpaper = ftxui::filler() | ftxui::bgcolor(ftxui::Color::Blue);
-
   auto tiles = ftxui::hbox({
       ftxui::filler(),
       HomeTile(">_", "Terminal",
@@ -305,10 +301,7 @@ ftxui::Element TerminalApp::RenderHome() {
       Footer(),
   });
 
-  return ftxui::dbox({
-      wallpaper,
-      desktop,
-  });
+  return desktop;
 }
 
 }  // namespace tdesktop

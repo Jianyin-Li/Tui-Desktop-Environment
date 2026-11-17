@@ -13,6 +13,7 @@ The TTY UI and session manager are not implemented yet.
 - Managed launch contract: reserved for `tdesktop-manager` started by the
   systemd target.
 - TTY UI (0.1.0): desktop-style Home with app tiles and a running-app card;
+  Home uses the terminal's native background (no forced wallpaper color).
   applications open in a full-screen pane rendered through libvterm with ANSI
   colors/attributes, cursor handling, alternate screen and resize support.
 - Launch starts on the desktop Home. `Enter` opens the Terminal tile.

@@ -11,6 +11,8 @@ Fresh TTY-first baseline.
 - Add `tdesktop --diagnostics`.
 - Add a full-screen TTY shell UI rendered through FTXUI and libvterm.
   - Desktop-style Home with Terminal/Exit tiles and a running-app card.
+  - Home uses the terminal's native background (no wallpaper fill); only
+    borders, text and the selected tile use accent colors.
   - `Enter` opens the Terminal tile; `Alt+Shift+H` hides/resumes.
   - `Alt+Shift+Q` closes the current application and returns to Home.
   - `Alt+Shift+X` exits only the TDESKTOP TUI program, not a manager.
