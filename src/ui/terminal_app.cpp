@@ -1,11 +1,16 @@
 #include "ui/terminal_app.h"
 
+#include "platform/environment.h"
 #include "ui/terminal_view.h"
 
 #include <tdesktop/version.h>
 
 #include <ftxui/component/event.hpp>
 
+#include <unistd.h>
+
+#include <algorithm>
+#include <ctime>
 #include <string>
 
 namespace tdesktop {
@@ -27,16 +32,22 @@ bool IsHideChord(const std::string& input) {
   return input == "\x1bH" || input == std::string(1, static_cast<char>(0xC8));
 }
 
+bool IsCloseAppChord(const std::string& input) {
+  return input == "\x1bQ" || input == std::string(1, static_cast<char>(0xD1));
+}
+
 }  // namespace
 
 TerminalApp::TerminalApp(PtySession& session,
                          ftxui::ScreenInteractive& screen)
-    : session_(session), screen_(screen) {}
+    : session_(session),
+      screen_(screen),
+      shell_(Environment::Current().GetOr("SHELL", "/bin/sh")) {}
 
 ftxui::Component TerminalApp::Root() {
   auto terminal = std::make_shared<TerminalView>(session_);
-  terminal_node_ = terminal;
-  terminal_element_ = std::static_pointer_cast<ftxui::Node>(terminal) | ftxui::flex;
+  terminal_element_ =
+      std::static_pointer_cast<ftxui::Node>(terminal) | ftxui::flex;
 
   auto renderer = ftxui::Renderer([this] {
     return hidden_ ? RenderHome() : RenderMain();
@@ -50,22 +61,54 @@ ftxui::Component TerminalApp::Root() {
 
 bool TerminalApp::OnEvent(ftxui::Event event) {
   if (event == ftxui::Event::Custom) {
+    if (!hidden_ && !session_.alive()) {
+      hidden_ = true;
+      message_ = "应用已退出";
+    }
     return false;
   }
 
   const std::string input = InputOf(event);
+
+  // Exit only the TDESKTOP UI process. A future target-only manager owns
+  // session lifetime; this key must not signal or kill it.
   if (IsQuitChord(input)) {
     screen_.Exit();
     return true;
   }
+
   if (IsHideChord(input)) {
-    hidden_ = !hidden_;
+    if (hidden_) {
+      ShowApp();
+    } else {
+      hidden_ = true;
+    }
+    return true;
+  }
+
+  // Close the current TUI program and return to the desktop. This does not
+  // quit TDESKTOP.
+  if (IsCloseAppChord(input)) {
+    ShowHome();
     return true;
   }
 
   if (hidden_) {
+    if (event == ftxui::Event::ArrowLeft || event == ftxui::Event::TabReverse) {
+      selected_tile_ = (selected_tile_ + 1) % 2;
+      return true;
+    }
+    if (event == ftxui::Event::ArrowRight || event == ftxui::Event::Tab) {
+      selected_tile_ = (selected_tile_ + 1) % 2;
+      return true;
+    }
     if (event == ftxui::Event::Return || input == "\n" || input == "\r") {
-      hidden_ = false;
+      if (selected_tile_ == 0) {
+        ShowApp();
+      } else {
+        screen_.Exit();
+      }
+      return true;
     }
     return true;
   }
@@ -81,7 +124,75 @@ bool TerminalApp::OnEvent(ftxui::Event event) {
   return true;
 }
 
+bool TerminalApp::StartSession() {
+  if (session_.alive()) {
+    return true;
+  }
+
+  // Reap/clean a previously exited session before starting a new one.
+  session_.Stop();
+  const int rows = std::max(1, screen_.dimy() - 2);
+  const int cols = std::max(1, screen_.dimx());
+  std::string error;
+  if (!session_.Start(shell_, rows, cols, &error)) {
+    message_ = "无法启动 shell: " + error;
+    return false;
+  }
+  message_.clear();
+  return true;
+}
+
+void TerminalApp::ShowApp() {
+  if (!session_.alive() && !StartSession()) {
+    hidden_ = true;
+    return;
+  }
+  hidden_ = false;
+}
+
+void TerminalApp::ShowHome() {
+  if (session_.alive()) {
+    session_.Stop();
+    message_ = "应用已关闭";
+  } else if (message_.empty()) {
+    message_ = "没有运行中的应用";
+  }
+  hidden_ = true;
+}
+
+std::string TerminalApp::Clock() const {
+  const std::time_t now = std::time(nullptr);
+  std::tm local {};
+  if (localtime_r(&now, &local) == nullptr) {
+    return "--:--";
+  }
+  char buffer[16] = {};
+  if (std::strftime(buffer, sizeof(buffer), "%H:%M", &local) == 0) {
+    return "--:--";
+  }
+  return buffer;
+}
+
+std::string TerminalApp::HostName() const {
+  char hostname[128] = {};
+  if (gethostname(hostname, sizeof(hostname) - 1) != 0) {
+    return "tty";
+  }
+  return hostname;
+}
+
 ftxui::Element TerminalApp::Header() {
+  if (hidden_) {
+    return ftxui::hbox({
+        ftxui::text(" TDESKTOP ") | ftxui::bold |
+            ftxui::color(ftxui::Color::Black) |
+            ftxui::bgcolor(ftxui::Color::Cyan),
+        ftxui::filler(),
+        ftxui::text(" " + HostName() + "  " + Clock() + " ") |
+            ftxui::color(ftxui::Color::White),
+    });
+  }
+
   std::string title = session_.Title();
   if (title.empty()) {
     title = "shell";
@@ -89,22 +200,79 @@ ftxui::Element TerminalApp::Header() {
   const std::string status = session_.alive() ? "running" : "exited";
   return ftxui::hbox({
       ftxui::text(" TDESKTOP ") | ftxui::bold |
-          ftxui::color(ftxui::Color::White) | ftxui::bgcolor(ftxui::Color::Blue),
-      ftxui::text(" " + title + " ") | ftxui::flex,
+          ftxui::color(ftxui::Color::Black) |
+          ftxui::bgcolor(ftxui::Color::Cyan),
+      ftxui::text(" " + title + " ") | ftxui::flex |
+          ftxui::color(ftxui::Color::White),
       ftxui::text(" " + status + " ") | ftxui::dim,
   });
 }
 
 ftxui::Element TerminalApp::Footer() {
-  const std::string toggle = hidden_ ? "恢复" : "隐藏";
+  if (hidden_) {
+    return ftxui::hbox({
+        ftxui::text("  [Terminal]  ") | ftxui::color(ftxui::Color::White) |
+            ftxui::bgcolor(session_.alive() ? ftxui::Color::Green
+                                            : ftxui::Color::GrayDark),
+        ftxui::text("  [Exit]  ") | ftxui::color(ftxui::Color::White) |
+            ftxui::bgcolor(ftxui::Color::GrayDark),
+        ftxui::filler(),
+        ftxui::text("←/→ 选择  Enter 打开  Alt+Shift+X 退出 TUI ") |
+            ftxui::dim,
+    });
+  }
+
   return ftxui::hbox({
-      ftxui::text(" Alt+Shift+H ") | ftxui::bold,
-      ftxui::text(toggle),
-      ftxui::text("  Alt+Shift+X ") | ftxui::bold,
-      ftxui::text("退出"),
-      ftxui::text("  TDESKTOP " TDESKTOP_VERSION) | ftxui::dim |
-          ftxui::flex,
+      ftxui::text(" Alt+Shift+H 隐藏   Alt+Shift+Q 关闭   Alt+Shift+X 退出 TUI ") |
+          ftxui::dim,
+      ftxui::filler(),
+      ftxui::text("TDESKTOP " TDESKTOP_VERSION) | ftxui::dim,
   });
+}
+
+ftxui::Element TerminalApp::HomeTile(const std::string& icon,
+                                     const std::string& name,
+                                     const std::string& subtitle,
+                                     bool selected) {
+  auto content = ftxui::vbox({
+      ftxui::text(icon) | ftxui::bold | ftxui::center,
+      ftxui::text(name) | ftxui::bold | ftxui::center,
+      ftxui::text(subtitle) | ftxui::center,
+  });
+
+  auto tile = content | ftxui::border | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, 24) |
+              ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, 7);
+  if (selected) {
+    return tile | ftxui::bgcolor(ftxui::Color::Cyan) |
+           ftxui::color(ftxui::Color::Black);
+  }
+  return tile | ftxui::bgcolor(ftxui::Color::GrayDark) |
+         ftxui::color(ftxui::Color::White);
+}
+
+ftxui::Element TerminalApp::RunningCard() {
+  if (!session_.alive()) {
+    if (!message_.empty()) {
+      return ftxui::text(message_) | ftxui::color(ftxui::Color::RedLight) |
+             ftxui::center;
+    }
+    return ftxui::text("没有运行中的应用") | ftxui::dim | ftxui::center;
+  }
+
+  std::string title = session_.Title();
+  if (title.empty()) {
+    title = "Shell";
+  }
+  return ftxui::vbox({
+             ftxui::hbox({
+                 ftxui::text(" ● ") | ftxui::color(ftxui::Color::GreenLight),
+                 ftxui::text(title) | ftxui::bold | ftxui::flex,
+                 ftxui::text("  PID " + std::to_string(session_.pid())) |
+                     ftxui::dim,
+             }),
+             ftxui::text("Enter 打开    Alt+Shift+Q 关闭") | ftxui::dim,
+         }) |
+         ftxui::border | ftxui::bgcolor(ftxui::Color::Black);
 }
 
 ftxui::Element TerminalApp::RenderMain() {
@@ -116,23 +284,30 @@ ftxui::Element TerminalApp::RenderMain() {
 }
 
 ftxui::Element TerminalApp::RenderHome() {
-  const std::string status = session_.alive() ? "运行中" : "已退出";
-  auto content = ftxui::vbox({
-                     ftxui::text("TDESKTOP " TDESKTOP_VERSION) | ftxui::bold,
-                     ftxui::text(""),
-                     ftxui::text("Shell  " + status) | ftxui::bold,
-                     ftxui::text("PID " + std::to_string(session_.pid())) |
-                         ftxui::dim,
-                     ftxui::text(""),
-                     ftxui::text("Enter  恢复"),
-                     ftxui::text("Alt+Shift+X  退出桌面"),
-                 }) |
-                 ftxui::border | ftxui::center;
+  auto wallpaper = ftxui::filler() | ftxui::bgcolor(ftxui::Color::Blue);
 
-  return ftxui::vbox({
+  auto tiles = ftxui::hbox({
+      ftxui::filler(),
+      HomeTile(">_", "Terminal",
+               session_.alive() ? "运行中" : "打开 shell", selected_tile_ == 0),
+      ftxui::text("   "),
+      HomeTile("X", "Exit", "退出 TUI", selected_tile_ == 1),
+      ftxui::filler(),
+  });
+
+  auto desktop = ftxui::vbox({
       Header(),
-      content | ftxui::flex,
+      ftxui::filler(),
+      tiles,
+      ftxui::text(""),
+      RunningCard() | ftxui::hcenter,
+      ftxui::filler(),
       Footer(),
+  });
+
+  return ftxui::dbox({
+      wallpaper,
+      desktop,
   });
 }
 

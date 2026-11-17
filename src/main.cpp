@@ -64,21 +64,10 @@ int RunUi() {
     auto screen = ftxui::ScreenInteractive::Fullscreen();
     screen.TrackMouse(false);
 
-    const std::string shell =
-        tdesktop::Environment::Current().GetOr("SHELL", "/bin/sh");
-    const int rows = std::max(1, screen.dimy() - 2);
-    const int cols = std::max(1, screen.dimx());
-
-    std::string error;
-    if (!session.Start(shell, rows, cols, &error)) {
-      std::cerr << "tdesktop: failed to start shell: " << error << '\n';
-      result = 1;
-    } else {
-      session.SetScreen(&screen);
-      tdesktop::TerminalApp app(session, screen);
-      screen.Loop(app.Root());
-      session.SetScreen(nullptr);
-    }
+    session.SetScreen(&screen);
+    tdesktop::TerminalApp app(session, screen);
+    screen.Loop(app.Root());
+    session.SetScreen(nullptr);
   }
 
   session.Stop();

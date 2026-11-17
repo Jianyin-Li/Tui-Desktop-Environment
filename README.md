@@ -12,8 +12,13 @@ The TTY UI and session manager are not implemented yet.
   umask and full environment; no PAM session and no manager.
 - Managed launch contract: reserved for `tdesktop-manager` started by the
   systemd target.
-- TTY UI (0.1.0): full-screen shell pane rendered through libvterm, with ANSI
+- TTY UI (0.1.0): desktop-style Home with app tiles and a running-app card;
+  applications open in a full-screen pane rendered through libvterm with ANSI
   colors/attributes, cursor handling, alternate screen and resize support.
+- Launch starts on the desktop Home. `Enter` opens the Terminal tile.
+- `Alt+Shift+Q` closes the current TUI application and returns to Home.
+- `Alt+Shift+X` exits the TDESKTOP TUI program only; it never signals the
+  target-only session manager.
 - `--diagnostics` reports launch identity and environment metadata without
   printing secrets.
 
@@ -69,8 +74,11 @@ tdesktop --help
 
 UI keys:
 
-- `Alt+Shift+H` — hide/show the shell (Home view)
-- `Alt+Shift+X` — quit TDESKTOP
+- `Enter` on the Terminal tile — open/resume the shell
+- `Alt+Shift+H` — hide/show the current application (Home)
+- `Alt+Shift+Q` — close the current application, return to Home
+- `Alt+Shift+X` — exit TDESKTOP (the TUI program); does not touch the manager
+- `←/→` — select a Home tile
 
 ## License
 
